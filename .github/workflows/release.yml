@@ -1,0 +1,52 @@
+name: Build & Release
+
+on:
+  # Run automatically when you push to master
+  push:
+    branches:
+      - master
+  # Also allows you to trigger a build manually from the GitHub website
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build macOS App
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2025-05-09
+          components: rustfmt, clippy
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: cardinal/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: cardinal
+        run: npm ci
+
+      - name: Build and package app
+        uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: cardinal
+          args: --bundles dmg
+
+      - name: Upload .dmg as downloadable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cardinal-Suite-macOS
+          # Tauri puts the .dmg in this location after building
+          path: cardinal/src-tauri/target/release/bundle/dmg/*.dmg
+          retention-days: 30
