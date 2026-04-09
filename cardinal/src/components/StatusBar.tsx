@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import type { AppLifecycleStatus } from '../types/ipc';
 import { useTranslation } from 'react-i18next';
 import { openPreferences } from '../utils/openPreferences';
+import { useIndexTimer } from '../hooks/useIndexTimer';
 
 export type StatusTabKey = 'files' | 'events';
 
@@ -43,14 +44,15 @@ const StatusBar = ({
   const eventsTabRef = useRef<HTMLButtonElement | null>(null);
   const [sliderStyle, setSliderStyle] = useState<CSSProperties>({});
 
+  // Shows how long the last index scan took, e.g. "Indexed 1,587,469 files in 4m 32s"
+  const indexDurationLabel = useIndexTimer(lifecycleState, scannedFiles);
+
   useLayoutEffect(() => {
-    // Keep the active-tab underline aligned even when labels resize or counters update.
     const updateSliderPosition = () => {
       const activeTabRef = activeTab === 'files' ? filesTabRef : eventsTabRef;
       if (activeTabRef.current && tabsRef.current) {
         const tabRect = activeTabRef.current.getBoundingClientRect();
         const containerRect = tabsRef.current.getBoundingClientRect();
-
         setSliderStyle({
           left: `${tabRect.left - containerRect.left}px`,
           width: `${tabRect.width}px`,
@@ -59,7 +61,6 @@ const StatusBar = ({
     };
 
     updateSliderPosition();
-    // Re-align the slider when the viewport changes width.
     window.addEventListener('resize', updateSliderPosition);
     return () => window.removeEventListener('resize', updateSliderPosition);
   }, [activeTab, scannedFiles, processedEvents]);
@@ -117,6 +118,12 @@ const StatusBar = ({
             {lifecycleMeta.icon}
           </span>
           <span className="status-text">{lifecycleLabel}</span>
+          {/* Index timing label — appears after a scan completes, e.g. "Indexed 1,587,469 files in 4m 32s" */}
+          {indexDurationLabel && (
+            <span className="status-text status-index-time" title={indexDurationLabel}>
+              — {indexDurationLabel}
+            </span>
+          )}
         </div>
         <div
           ref={tabsRef}
@@ -157,9 +164,7 @@ const StatusBar = ({
             title={rescanTooltip}
             aria-label={t('statusBar.aria.rescan')}
           >
-            <span className="status-rescan-icon" aria-hidden="true">
-              ↻
-            </span>
+            <span className="status-rescan-icon" aria-hidden="true">↻</span>
             <span className="sr-only">{t('statusBar.aria.rescan')}</span>
           </button>
           <button
