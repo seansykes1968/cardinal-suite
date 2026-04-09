@@ -1,11 +1,9 @@
 name: Build & Release
 
 on:
-  # Run automatically when you push to master
   push:
     branches:
       - master
-  # Also allows you to trigger a build manually from the GitHub website
   workflow_dispatch:
 
 jobs:
@@ -37,16 +35,17 @@ jobs:
         working-directory: cardinal
         run: npm ci
 
-      - name: Build and package app
-        uses: tauri-apps/tauri-action@v0
-        with:
-          projectPath: cardinal
-          args: --bundles dmg
+      - name: Build frontend
+        working-directory: cardinal
+        run: npm run build
 
-      - name: Upload .dmg as downloadable artifact
+      - name: Build app with Tauri
+        working-directory: cardinal/src-tauri
+        run: cargo build --release
+
+      - name: Upload app as downloadable artifact
         uses: actions/upload-artifact@v4
         with:
           name: Cardinal-Suite-macOS
-          # Tauri puts the .dmg in this location after building
-          path: cardinal/src-tauri/target/release/bundle/dmg/*.dmg
+          path: cardinal/src-tauri/target/release/cardinal*
           retention-days: 30
