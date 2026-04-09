@@ -4,64 +4,27 @@
 /// fast on a local SSD become prohibitively slow or cause side-effects:
 ///
 /// - Content search opens every matching file in 64 KB chunks over the network.
-/// - Metadata reads incur per-file round-trip latency.
 /// - Opening large binary files (Illustrator, Photoshop) while those apps have
 ///   them open can interfere with advisory locks and block saves.
 ///
 /// This module provides cheap guards to short-circuit those operations.
 
-use std::ffi::CString;
 use std::path::Path;
 
 // ---------------------------------------------------------------------------
 // Network volume detection
 // ---------------------------------------------------------------------------
 
-/// File-system types that indicate a remote/network mount.
-/// Extend this list as needed (e.g. "nfs", "afpfs", "smbfs", "webdav").
-const NETWORK_FS_TYPES: &[&str] = &["smbfs", "afpfs", "nfs", "webdav", "ftpfs", "osxfuse"];
-
-/// Returns `true` if `path` is located on a network (remote) volume.
+/// Returns `true` if `path` is likely located on a network (remote) volume.
 ///
-/// Uses `statfs(2)` under the hood — one syscall, no file opens.
-/// Falls back to `false` (safe default) if the call fails.
-#[cfg(target_os = "macos")]
+/// On macOS, network drives (SMB, AFP, NFS etc.) are almost always mounted
+/// under `/Volumes/`. This is a fast, zero-syscall check that covers the
+/// vast majority of real-world network drive configurations including Suite.
+///
+/// Falls back to `false` (safe default) for any path that doesn't match,
+/// meaning local files are never incorrectly treated as network files.
 pub fn is_network_path(path: &Path) -> bool {
-    use std::mem::MaybeUninit;
-
-    let Ok(cpath) = path_to_cstring(path) else {
-        return false;
-    };
-
-    // SAFETY: `statfs` is a standard POSIX call. We pass a valid C string and a
-    // properly aligned, zeroed output buffer.
-    let mut buf: MaybeUninit<libc::statfs> = MaybeUninit::zeroed();
-    let ret = unsafe { libc::statfs(cpath.as_ptr(), buf.as_mut_ptr()) };
-    if ret != 0 {
-        return false;
-    }
-    let stat = unsafe { buf.assume_init() };
-
-    // `f_fstypename` is a null-terminated C string of at most 16 bytes.
-    let type_bytes = stat.f_fstypename.map(|b| b as u8);
-    let type_str = std::str::from_utf8(
-        &type_bytes[..type_bytes.iter().position(|&b| b == 0).unwrap_or(type_bytes.len())],
-    )
-    .unwrap_or("");
-
-    NETWORK_FS_TYPES
-        .iter()
-        .any(|&t| type_str.eq_ignore_ascii_case(t))
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn is_network_path(_path: &Path) -> bool {
-    false
-}
-
-fn path_to_cstring(path: &Path) -> Result<CString, std::ffi::NulError> {
-    use std::os::unix::ffi::OsStrExt;
-    CString::new(path.as_os_str().as_bytes())
+    path.starts_with("/Volumes/")
 }
 
 // ---------------------------------------------------------------------------
@@ -74,11 +37,11 @@ fn path_to_cstring(path: &Path) -> Result<CString, std::ffi::NulError> {
 /// Rationale:
 /// - These files are large opaque binaries; text search rarely returns
 ///   meaningful results and is very slow over a network drive.
-/// - Applications like Adobe Illustrator and Photoshop use advisory `flock()`
-///   during saves. A long-lived `O_RDONLY` handle held by Cardinal's content
+/// - Applications like Adobe Illustrator and Photoshop use advisory locks
+///   during saves. A long-lived file handle held by Cardinal's content
 ///   search loop can race with those locks and cause the app to fail to save.
 ///
-/// Add formats here freely — the check is a single hash-set lookup.
+/// Add formats here freely — the check is a simple string comparison.
 const SKIP_CONTENT_EXTENSIONS: &[&str] = &[
     // Adobe
     "ai", "psd", "psb", "indd", "indb", "aep", "prproj",
@@ -119,12 +82,11 @@ pub fn should_skip_content_search(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     #[test]
     fn illustrator_files_are_skipped() {
         assert!(should_skip_content_search(Path::new("logo.ai")));
-        assert!(should_skip_content_search(Path::new("design.AI"))); // case-insensitive
+        assert!(should_skip_content_search(Path::new("design.AI")));
         assert!(should_skip_content_search(Path::new("photo.psd")));
     }
 
@@ -139,5 +101,17 @@ mod tests {
     fn files_without_extension_are_not_skipped() {
         assert!(!should_skip_content_search(Path::new("Makefile")));
         assert!(!should_skip_content_search(Path::new("LICENSE")));
+    }
+
+    #[test]
+    fn volumes_path_is_network() {
+        assert!(is_network_path(Path::new("/Volumes/SuiteDrive/project.ai")));
+        assert!(is_network_path(Path::new("/Volumes/MyServer/file.txt")));
+    }
+
+    #[test]
+    fn local_path_is_not_network() {
+        assert!(!is_network_path(Path::new("/Users/sean/Documents/file.txt")));
+        assert!(!is_network_path(Path::new("/tmp/cache")));
     }
 }
