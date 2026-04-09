@@ -5,6 +5,11 @@ on:
     branches:
       - master
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version number (e.g. 1.0.3). Leave blank to auto-increment.'
+        required: false
+        type: string
 
 jobs:
   build:
@@ -14,6 +19,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Determine version number
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+            echo "VERSION=dev-${SHORT_SHA}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
@@ -45,10 +60,30 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: cardinal
+          tagName: v${{ steps.version.outputs.VERSION }}
+          releaseName: Cardinal Suite v${{ steps.version.outputs.VERSION }}
+          releaseBody: |
+            ## Cardinal Suite v${{ steps.version.outputs.VERSION }}
 
-      - name: Upload .app bundle as downloadable artifact
+            Built from commit ${{ github.sha }}
+
+            ### What's included in this build
+            - Fix for Illustrator/Photoshop file locking during search
+            - Faster initial indexing of network drives
+            - Faster cache read/write
+            - Improved handling of large sync bursts (Suite drive)
+
+            ### Install instructions
+            1. Download the `.app.tar.gz` file below
+            2. Unzip it
+            3. Drag **Cardinal.app** to your Applications folder
+            4. Right-click → Open the first time (macOS security prompt)
+          releaseDraft: false
+          prerelease: false
+
+      - name: Upload .app as artifact (backup)
         uses: actions/upload-artifact@v4
         with:
-          name: Cardinal-Suite-macOS
+          name: Cardinal-Suite-v${{ steps.version.outputs.VERSION }}
           path: cardinal/src-tauri/target/release/bundle/macos/*.app
-          retention-days: 30
+          retention-days: 90
