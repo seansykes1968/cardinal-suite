@@ -39,13 +39,16 @@ jobs:
         working-directory: cardinal
         run: npm run build
 
-      - name: Build app with Tauri
-        working-directory: cardinal/src-tauri
-        run: cargo build --release
+      - name: Build app bundle with Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: cardinal
 
-      - name: Upload app as downloadable artifact
+      - name: Upload .app bundle as downloadable artifact
         uses: actions/upload-artifact@v4
         with:
           name: Cardinal-Suite-macOS
-          path: cardinal/src-tauri/target/release/cardinal*
+          path: cardinal/src-tauri/target/release/bundle/macos/*.app
           retention-days: 30
