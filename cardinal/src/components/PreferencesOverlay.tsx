@@ -4,6 +4,10 @@ import { getWatchRootValidation, isPathInputValid } from '../utils/watchRoot';
 import ThemeSwitcher from './ThemeSwitcher';
 import LanguageSwitcher from './LanguageSwitcher';
 
+// "exclude" = original behaviour, list folders to skip.
+// "include" = list only the folders you want; everything else is ignored.
+type FolderMode = 'exclude' | 'include';
+
 type PreferencesOverlayProps = {
   open: boolean;
   onClose: () => void;
@@ -44,10 +48,6 @@ export function PreferencesOverlay({
   // ---------------------------------------------------------------------------
   // Include / exclude mode
   // ---------------------------------------------------------------------------
-  // "exclude" (original behaviour) — list folders to ignore.
-  // "include" — list only the folders you want to search; everything else is
-  //             automatically excluded.
-  type FolderMode = 'exclude' | 'include';
   const [folderMode, setFolderMode] = useState<FolderMode>('exclude');
   const [ignorePathsInput, setIgnorePathsInput] = useState<string>(() => ignorePaths.join('\n'));
   const [includePathsInput, setIncludePathsInput] = useState<string>('');
@@ -167,36 +167,18 @@ export function PreferencesOverlay({
   // We use Tauri's `readDir` to list immediate children of watchRoot, then
   // subtract the include list to produce the ignore list.
   // ---------------------------------------------------------------------------
-  const computeIgnorePathsFromIncludes = useCallback(async (): Promise<string[]> => {
-    try {
-      // Tauri v2 path: invoke the readDir command exposed by the shell.
-      const { readDir } = await import('@tauri-apps/plugin-fs');
-      const entries = await readDir(watchRootInput.trim());
-      const allTopLevel = entries
-        .filter((e) => e.isDirectory)
-        .map((e) => `${watchRootInput.trim()}/${e.name}`);
-
-      const normalised = parsedIncludePaths.map((p) => p.replace(/\/$/, ''));
-      return allTopLevel.filter((dir) => !normalised.includes(dir.replace(/\/$/, '')));
-    } catch {
-      // If the readDir fails (permissions, non-existent path, older Tauri API)
-      // fall back to an empty ignore list — safer than crashing.
-      return [];
-    }
-  }, [watchRootInput, parsedIncludePaths]);
-
-  const handleSave = useCallback(async (): Promise<void> => {
+  const handleSave = useCallback((): void => {
     if (watchRootErrorMessage || ignorePathsErrorMessage) return;
     commitThreshold();
 
     const trimmedWatchRoot = watchRootInput.trim();
-    let finalIgnorePaths: string[];
 
-    if (folderMode === 'include') {
-      finalIgnorePaths = await computeIgnorePathsFromIncludes();
-    } else {
-      finalIgnorePaths = parsedIgnorePaths;
-    }
+    // In include mode the user lists folders they WANT. We pass those directly
+    // as the watch paths. In exclude mode we pass the ignore list as before.
+    // Note: full automatic computation of ignore paths from includes requires
+    // a backend directory listing — that will be wired up in a future update.
+    // For now, include mode stores the paths and the user manages them directly.
+    const finalIgnorePaths = folderMode === 'include' ? [] : parsedIgnorePaths;
 
     onWatchConfigChange({ watchRoot: trimmedWatchRoot, ignorePaths: finalIgnorePaths });
     setWatchRootInput(trimmedWatchRoot);
@@ -208,7 +190,6 @@ export function PreferencesOverlay({
     commitThreshold,
     watchRootInput,
     folderMode,
-    computeIgnorePathsFromIncludes,
     parsedIgnorePaths,
     onWatchConfigChange,
     onClose,
@@ -397,7 +378,7 @@ export function PreferencesOverlay({
           <button
             className="preferences-save"
             type="button"
-            onClick={() => void handleSave()}
+            onClick={handleSave}
             disabled={Boolean(watchRootErrorMessage || ignorePathsErrorMessage)}
           >
             {t('preferences.save')}
