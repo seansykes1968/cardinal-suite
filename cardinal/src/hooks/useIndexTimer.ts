@@ -1,22 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-
-type LifecycleState = 'initializing' | 'updating' | 'ready';
+import type { AppLifecycleStatus } from '../types/ipc';
 
 /**
  * Tracks how long the last index scan took and returns a human-readable string.
- *
- * Usage in StatusBar:
- *
- *   const indexDurationLabel = useIndexTimer(lifecycleState, scannedFiles);
- *
- * Then render it somewhere in the status bar, e.g.:
- *
- *   {indexDurationLabel && (
- *     <span className="status-bar__index-time">{indexDurationLabel}</span>
- *   )}
+ * Displayed in the StatusBar after a scan completes.
+ * Example output: "Indexed 1,587,469 files in 4m 32s"
  */
 export function useIndexTimer(
-  lifecycleState: LifecycleState,
+  lifecycleState: AppLifecycleStatus,
   scannedFiles: number,
 ): string | null {
   const startTimeRef = useRef<number | null>(null);
@@ -24,31 +15,20 @@ export function useIndexTimer(
   const [label, setLabel] = useState<string | null>(null);
 
   useEffect(() => {
-    if (lifecycleState === 'initializing' || lifecycleState === 'updating') {
-      // Scan started — record the start time and file count.
+    if (lifecycleState === 'Initializing' || lifecycleState === 'Updating') {
       startTimeRef.current = Date.now();
       startFileCountRef.current = scannedFiles;
-    } else if (lifecycleState === 'ready' && startTimeRef.current !== null) {
-      // Scan finished — calculate elapsed time and files indexed.
+    } else if (lifecycleState === 'Ready' && startTimeRef.current !== null) {
       const elapsed = Date.now() - startTimeRef.current;
       const filesIndexed = scannedFiles - startFileCountRef.current;
       startTimeRef.current = null;
       setLabel(formatIndexDuration(elapsed, filesIndexed));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lifecycleState]);
+  }, [lifecycleState, scannedFiles]);
 
   return label;
 }
 
-/**
- * Formats elapsed milliseconds and file count into a readable label.
- *
- * Examples:
- *   formatIndexDuration(4320000, 1587469) → "Indexed 1,587,469 files in 1h 12m"
- *   formatIndexDuration(94000, 45000)     → "Indexed 45,000 files in 1m 34s"
- *   formatIndexDuration(8200, 1200)       → "Indexed 1,200 files in 8s"
- */
 function formatIndexDuration(ms: number, fileCount: number): string {
   const totalSeconds = Math.round(ms / 1000);
   const hours = Math.floor(totalSeconds / 3600);
@@ -64,6 +44,5 @@ function formatIndexDuration(ms: number, fileCount: number): string {
     timeStr = `${seconds}s`;
   }
 
-  const formattedCount = fileCount.toLocaleString();
-  return `Indexed ${formattedCount} files in ${timeStr}`;
+  return `Indexed ${fileCount.toLocaleString()} files in ${timeStr}`;
 }
