@@ -302,8 +302,14 @@ export function PreferencesOverlay({
             <div className="preferences-row__details">
               <p className="preferences-label">Folder mode</p>
             </div>
-            <div className="preferences-control preferences-folder-mode">
-              <label className="preferences-folder-mode__option">
+            <div
+              className="preferences-control preferences-folder-mode"
+              style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
+            >
+              <label
+                className="preferences-folder-mode__option"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+              >
                 <input
                   type="radio"
                   name="folderMode"
@@ -313,7 +319,10 @@ export function PreferencesOverlay({
                 />
                 <span>Search only these folders</span>
               </label>
-              <label className="preferences-folder-mode__option">
+              <label
+                className="preferences-folder-mode__option"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+              >
                 <input
                   type="radio"
                   name="folderMode"
@@ -325,7 +334,6 @@ export function PreferencesOverlay({
               </label>
             </div>
           </div>
-
           {/* Folder paths textarea — changes label based on mode */}
           <div className="preferences-row">
             <div className="preferences-row__details">
