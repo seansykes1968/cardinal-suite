@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useLayoutEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
-import type { AppLifecycleStatus } from '../types/ipc';
+import type { AppLifecycleStatus, DriveStatus } from '../types/ipc';
 import { useTranslation } from 'react-i18next';
 import { openPreferences } from '../utils/openPreferences';
 import { useIndexTimer } from '../hooks/useIndexTimer';
@@ -17,6 +17,7 @@ type StatusBarProps = {
   onTabChange: (tab: StatusTabKey) => void;
   onRequestRescan: () => void;
   rescanErrorCount: number;
+  driveStatus: DriveStatus;
 };
 
 const TABS: StatusTabKey[] = ['files', 'events'];
@@ -37,6 +38,7 @@ const StatusBar = ({
   onTabChange,
   onRequestRescan,
   rescanErrorCount,
+  driveStatus,
 }: StatusBarProps): React.JSX.Element => {
   const { t } = useTranslation();
   const tabsRef = useRef<HTMLDivElement | null>(null);
@@ -118,10 +120,29 @@ const StatusBar = ({
             {lifecycleMeta.icon}
           </span>
           <span className="status-text">{lifecycleLabel}</span>
-          {/* Index timing label — appears after a scan completes, e.g. "Indexed 1,587,469 files in 4m 32s" */}
           {indexDurationLabel && (
             <span className="status-text status-index-time" title={indexDurationLabel}>
-              — {indexDurationLabel}
+              {' — '}
+              {indexDurationLabel}
+            </span>
+          )}
+          {driveStatus === 'unmounted' && (
+            <span
+              className="status-drive-offline"
+              title="The watched folder is not accessible. Results shown are from the last known index."
+              style={{
+                marginLeft: '8px',
+                padding: '1px 7px',
+                borderRadius: '10px',
+                fontSize: '0.75em',
+                fontWeight: 600,
+                background: 'var(--color-warning-bg, #fff3cd)',
+                color: 'var(--color-warning-text, #856404)',
+                border: '1px solid var(--color-warning-border, #ffc107)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Drive offline
             </span>
           )}
         </div>
@@ -164,7 +185,9 @@ const StatusBar = ({
             title={rescanTooltip}
             aria-label={t('statusBar.aria.rescan')}
           >
-            <span className="status-rescan-icon" aria-hidden="true">↻</span>
+            <span className="status-rescan-icon" aria-hidden="true">
+              ↻
+            </span>
             <span className="sr-only">{t('statusBar.aria.rescan')}</span>
           </button>
           <button
