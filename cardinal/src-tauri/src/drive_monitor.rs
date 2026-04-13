@@ -13,9 +13,11 @@
 ///
 /// The thread exits cleanly when `APP_QUIT` is set (i.e. the app is quitting).
 use crate::lifecycle::APP_QUIT;
-use std::path::PathBuf;
-use std::sync::atomic::Ordering;
-use std::time::Duration;
+use std::{
+    path::PathBuf,
+    sync::atomic::Ordering,
+    time::Duration,
+};
 use tauri::Emitter;
 use tracing::info;
 
@@ -56,9 +58,5 @@ pub fn start_drive_monitor(app_handle: tauri::AppHandle, watch_root: PathBuf) {
 }
 
 fn status_str(mounted: bool) -> &'static str {
-    if mounted {
-        "mounted"
-    } else {
-        "unmounted"
-    }
+    if mounted { "mounted" } else { "unmounted" }
 }
