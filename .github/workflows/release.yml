@@ -1,89 +1,111 @@
 name: Build & Release
 
 on:
-  push:
-    branches:
-      - master
+  # Triggered automatically by Release Please when a release PR is merged
+  release:
+    types: [created]
+  # Manual dev builds
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version number (e.g. 1.0.3). Leave blank to auto-increment.'
+        description: 'Version override (e.g. v1.2.0) — leave blank for dev build'
         required: false
-        type: string
 
 jobs:
   build:
-    name: Build macOS App
     runs-on: macos-14
+    permissions:
+      contents: write
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Determine version number
+      - name: Determine version
         id: version
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "version=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          elif [ -n "${{ inputs.version }}" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
           else
             SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-            echo "VERSION=dev-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "version=vdev-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "is_release=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Install Rust
+      - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly-2025-05-09
-          components: rustfmt, clippy
+          components: rustfmt,clippy
 
-      - name: Cache Rust build
+      - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cardinal/src-tauri
 
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: '20'
+          cache: 'npm'
           cache-dependency-path: cardinal/package-lock.json
 
       - name: Install frontend dependencies
         working-directory: cardinal
         run: npm ci
 
-      - name: Build frontend
-        working-directory: cardinal
-        run: npm run build
-
-      - name: Build app bundle with Tauri
+      - name: Build and package app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: cardinal
-          tagName: v${{ steps.version.outputs.VERSION }}
-          releaseName: Cardinal Suite v${{ steps.version.outputs.VERSION }}
+          tagName: ${{ steps.version.outputs.version }}
+          releaseName: Cardinal Suite ${{ steps.version.outputs.version }}
+          releaseId: ${{ github.event_name == 'release' && github.event.release.id || '' }}
           releaseBody: |
-            ## Cardinal Suite v${{ steps.version.outputs.VERSION }}
+            ## Cardinal Suite ${{ steps.version.outputs.version }}
 
-            Built from commit ${{ github.sha }}
+            SharkNinja Visualization Studio fork of [Cardinal](https://github.com/cardisoft/cardinal), optimised for the Suite network drive (`/Volumes/sn_globalserver`).
 
-            ### What's included in this build
-            - Fix for Illustrator/Photoshop file locking during search
-            - Faster initial indexing of network drives
-            - Faster cache read/write
-            - Improved handling of large sync bursts (Suite drive)
+            ---
 
-            ### Install instructions
-            1. Download the `.app.tar.gz` file below
-            2. Unzip it
-            3. Drag **Cardinal.app** to your Applications folder
-            4. Right-click → Open the first time (macOS security prompt)
+            ### What's new in v0.1.0
+
+            **Bug fixes**
+            - Fixed Illustrator and Photoshop files occasionally failing to save while Cardinal was running. Cardinal no longer opens `.ai`, `.psd`, `.psb`, `.indd` or other creative files during content search.
+            - Fixed Preferences dialog closing unexpectedly when resizing the "Ignore Paths" textarea.
+
+            **Search improvements**
+            - Search results now require at least 2 characters before displaying. Previously, an empty search box attempted to render all ~1.5 million indexed files at once, causing the app to freeze.
+            - `.DS_Store`, `._` AppleDouble resource-fork files, and other macOS filesystem noise are now excluded from the index entirely. This reduces the file count by ~130,000 entries and removes junk from search results.
+
+            **New features**
+            - **Index timer** — the status bar now shows how long the last index scan took and how many files were indexed, e.g. *"Indexed 1,458,527 files in 4m 32s"*.
+            - **Drive offline detection** — if Suite is not mounted when Cardinal opens, or is disconnected while running, a *"Drive offline"* badge appears in the status bar. The last known index remains searchable.
+            - **Include folders mode** — Preferences now offers a "Search only these folders" option alongside the existing "Exclude these folders" mode.
+
+            **Performance**
+            - Faster index cache saves (compression level reduced for frequent writes).
+            - Parallel metadata fetching on network volumes.
+
+            ---
+
+            ### Installation
+            1. Download `Cardinal-Suite-${{ steps.version.outputs.version }}.app.tar.gz` below
+            2. Extract and move `Cardinal Suite.app` to your Applications folder
+            3. Right-click → Open the first time (Apple Gatekeeper)
+            4. In Preferences, set **Monitor root path** to `/Volumes/sn_globalserver`
           releaseDraft: false
           prerelease: false
 
-      - name: Upload .app as artifact (backup)
+      - name: Upload app bundle as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Cardinal-Suite-v${{ steps.version.outputs.VERSION }}
+          name: Cardinal-Suite-${{ steps.version.outputs.version }}
           path: cardinal/src-tauri/target/release/bundle/macos/*.app
           retention-days: 90
