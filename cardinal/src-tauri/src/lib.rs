@@ -7,7 +7,6 @@ mod search_activity;
 mod sort;
 mod window_controls;
 
-
 use anyhow::{Context, Result};
 use background::{
     BackgroundLoopChannels, IconPayload, build_search_cache, emit_status_bar_update,
@@ -210,8 +209,6 @@ pub fn run() -> Result<()> {
                 }
             }
             RunEvent::Reopen { .. } => {
-                // On macOS, clicking the Dock icon should bring the main window back even if the
-                // app still "has windows" but they are hidden.
                 if let Some(window) = app_handle.get_webview_window("main") {
                     activate_window(&window);
                 } else {
@@ -292,7 +289,6 @@ fn run_logic_thread(
     };
 
     info!("Started background processing thread");
-    // TODO(ldm0): remove this watch_root, use cache's path instead
     run_background_event_loop(
         app_handle,
         cache,
