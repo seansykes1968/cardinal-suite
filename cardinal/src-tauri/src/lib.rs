@@ -1,10 +1,12 @@
 mod background;
 mod commands;
+mod drive_monitor;
 mod lifecycle;
 mod quicklook;
 mod search_activity;
 mod sort;
 mod window_controls;
+
 
 use anyhow::{Context, Result};
 use background::{
@@ -237,6 +239,10 @@ fn run_logic_thread(
     };
     let path = PathBuf::from(&watch_root);
     let ignore_paths: Vec<_> = ignore_paths.into_iter().map(PathBuf::from).collect();
+
+    // Emit drive_status events to the frontend whenever the watch root
+    // is mounted or unmounted (e.g. Suite going offline).
+    drive_monitor::start_drive_monitor(app_handle.clone(), path.clone());
 
     let mut cache =
         match SearchCache::try_read_persistent_cache(&path, db_path, &ignore_paths, &APP_QUIT) {
