@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    "cardinal": {
+      "release-type": "node",
+      "package-name": "cardinal-suite",
+      "changelog-path": "CHANGELOG.md"
+    }
+  }
+}
