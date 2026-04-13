@@ -13,11 +13,7 @@
 ///
 /// The thread exits cleanly when `APP_QUIT` is set (i.e. the app is quitting).
 use crate::lifecycle::APP_QUIT;
-use std::{
-    path::PathBuf,
-    sync::atomic::Ordering,
-    time::Duration,
-};
+use std::{path::PathBuf, sync::atomic::Ordering, time::Duration};
 use tauri::Emitter;
 use tracing::info;
 
