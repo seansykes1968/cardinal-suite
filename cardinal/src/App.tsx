@@ -30,6 +30,13 @@ import { useAppPreferences } from './hooks/useAppPreferences';
 import { useAppWindowListeners } from './hooks/useAppWindowListeners';
 import { useFilesTabEffects } from './hooks/useFilesTabEffects';
 import { useFilesTabState } from './hooks/useFilesTabState';
+import { useDriveStatus } from './hooks/useDriveStatus';
+
+// Require at least this many characters before sending a search to the backend.
+// Prevents loading all ~1.5 M indexed files into the UI when the query box is
+// empty or only partially typed, which caused the app to freeze on large drives
+// like Suite (/Volumes/sn_globalserver).
+const MIN_QUERY_LENGTH = 2;
 
 function App() {
   const {
@@ -81,6 +88,18 @@ function App() {
     t('sorting.disabled', { limit }),
   );
 
+  // Guard: don't fire a backend search until the user has typed MIN_QUERY_LENGTH
+  // characters. Passing an empty (or near-empty) query returns the entire index,
+  // which freezes the UI when the index contains millions of files.
+  const guardedQueueSearch = useCallback(
+    (...args: Parameters<typeof queueSearch>) => {
+      const [query, options] = args;
+      if (query.trim().length < MIN_QUERY_LENGTH) return;
+      queueSearch(query, options);
+    },
+    [queueSearch],
+  );
+
   const {
     activeTab,
     isSearchFocused,
@@ -95,7 +114,7 @@ function App() {
     submitFilesQuery,
   } = useFilesTabState({
     searchQuery: searchParams.query,
-    queueSearch,
+    queueSearch: guardedQueueSearch,
   });
   const { filteredEvents } = useRecentFSEvents({
     caseSensitive,
@@ -176,6 +195,8 @@ function App() {
     refreshSearchResults,
     i18n,
   });
+
+  const driveStatus = useDriveStatus();
 
   useAppWindowListeners({
     activeTab,
@@ -288,6 +309,10 @@ function App() {
     if (!initialFetchCompleted) return 'loading';
     if (showLoadingUI) return 'loading';
     if (searchError) return 'error';
+    // Don't render results until the user has typed enough characters.
+    // An empty query on a large network drive returns millions of rows and
+    // freezes the virtualized list renderer.
+    if (currentQuery.trim().length < MIN_QUERY_LENGTH) return 'empty';
     if (results.length === 0) return 'empty';
     return 'results';
   })();
@@ -391,6 +416,7 @@ function App() {
           onTabChange={onTabChange}
           onRequestRescan={requestRescan}
           rescanErrorCount={rescanErrors}
+          driveStatus={driveStatus}
         />
       </main>
       <PreferencesOverlay
