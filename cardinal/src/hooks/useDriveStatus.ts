@@ -22,9 +22,13 @@ export function useDriveStatus(): DriveStatus {
       if (payload === 'mounted' || payload === 'unmounted') {
         setStatus(payload);
       }
-    }).then((fn) => {
-      unlisten = fn;
-    });
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {
+        // Not running inside Tauri (e.g. test environment) — ignore.
+      });
 
     return () => {
       unlisten?.();
