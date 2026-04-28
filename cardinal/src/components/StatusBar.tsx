@@ -18,6 +18,7 @@ type StatusBarProps = {
   onRequestRescan: () => void;
   rescanErrorCount: number;
   driveStatus: DriveStatus;
+  scopeLabel: string;
 };
 
 const TABS: StatusTabKey[] = ['files', 'events'];
@@ -39,6 +40,7 @@ const StatusBar = ({
   onRequestRescan,
   rescanErrorCount,
   driveStatus,
+  scopeLabel,
 }: StatusBarProps): React.JSX.Element => {
   const { t } = useTranslation();
   const tabsRef = useRef<HTMLDivElement | null>(null);
@@ -120,6 +122,15 @@ const StatusBar = ({
             {lifecycleMeta.icon}
           </span>
           <span className="status-text">{lifecycleLabel}</span>
+          {scopeLabel && (
+            <span
+              className="status-text"
+              style={{ opacity: 0.5 }}
+              title={scopeLabel}
+            >
+              {' — '}{scopeLabel}
+            </span>
+          )}
           {indexDurationLabel && (
             <span className="status-text status-index-time" title={indexDurationLabel}>
               {' — '}

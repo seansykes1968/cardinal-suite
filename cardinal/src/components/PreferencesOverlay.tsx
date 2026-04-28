@@ -20,7 +20,7 @@ type PreferencesOverlayProps = {
   onTrayIconEnabledChange: (enabled: boolean) => void;
   watchRoot: string;
   defaultWatchRoot: string;
-  onWatchConfigChange: (next: { watchRoot: string; ignorePaths: string[] }) => void;
+  onWatchConfigChange: (next: { watchRoot: string; ignorePaths: string[]; scopeLabel: string }) => void;
   ignorePaths: string[];
   defaultIgnorePaths: string[];
   onReset: () => void;
@@ -248,7 +248,20 @@ export function PreferencesOverlay({
       finalIgnorePaths = parsedIgnorePaths;
     }
 
-    onWatchConfigChange({ watchRoot: finalWatchRoot, ignorePaths: finalIgnorePaths });
+    // Compute a human-readable scope label for the status bar.
+    let scopeLabel: string;
+    if (folderMode === 'include' && checkedFolders.size > 0) {
+      if (checkedFolders.size === 1) {
+        const only = [...checkedFolders][0];
+        scopeLabel = only.split('/').filter(Boolean).pop() ?? only;
+      } else {
+        scopeLabel = `${checkedFolders.size} folders`;
+      }
+    } else {
+      scopeLabel = finalWatchRoot.split('/').filter(Boolean).pop() ?? finalWatchRoot;
+    }
+
+    onWatchConfigChange({ watchRoot: finalWatchRoot, ignorePaths: finalIgnorePaths, scopeLabel });
     setWatchRootInput(finalWatchRoot);
     setIgnorePathsInput(finalIgnorePaths.join('\n'));
     onClose();

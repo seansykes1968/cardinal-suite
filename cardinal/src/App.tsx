@@ -174,6 +174,7 @@ function App() {
     defaultWatchRoot,
     ignorePaths,
     defaultIgnorePaths,
+    scopeLabel,
     preferencesResetToken,
     handleWatchConfigChange,
     handleResetPreferences,
@@ -405,6 +406,7 @@ function App() {
           onRequestRescan={requestRescan}
           rescanErrorCount={rescanErrors}
           driveStatus={driveStatus}
+          scopeLabel={scopeLabel}
         />
       </main>
       <PreferencesOverlay

@@ -14,6 +14,7 @@ import { useWatchRoot } from './useWatchRoot';
 type WatchConfigChangePayload = {
   watchRoot: string;
   ignorePaths: string[];
+  scopeLabel: string;
 };
 
 type UseAppPreferencesOptions = {
@@ -32,6 +33,7 @@ type UseAppPreferencesResult = {
   defaultWatchRoot: string;
   ignorePaths: string[];
   defaultIgnorePaths: string[];
+  scopeLabel: string;
   preferencesResetToken: number;
   handleWatchConfigChange: (next: WatchConfigChangePayload) => void;
   handleResetPreferences: () => void;
@@ -55,6 +57,9 @@ export function useAppPreferences({
   const logicStartedRef = useRef(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [trayIconEnabled, setTrayIconEnabled] = useState<boolean>(() => getStoredTrayIconEnabled());
+  const [scopeLabel, setScopeLabel] = useState<string>(() =>
+    watchRoot ? (watchRoot.split('/').filter(Boolean).pop() ?? watchRoot) : '',
+  );
   const [preferencesResetToken, setPreferencesResetToken] = useState(0);
 
   useEffect(() => {
@@ -115,6 +120,7 @@ export function useAppPreferences({
   const handleWatchConfigChange = useCallback(
     (next: WatchConfigChangePayload) => {
       applyWatchConfig(next.watchRoot, next.ignorePaths);
+      setScopeLabel(next.scopeLabel);
     },
     [applyWatchConfig],
   );
@@ -139,6 +145,7 @@ export function useAppPreferences({
     defaultWatchRoot,
     ignorePaths,
     defaultIgnorePaths,
+    scopeLabel,
     preferencesResetToken,
     handleWatchConfigChange,
     handleResetPreferences,
