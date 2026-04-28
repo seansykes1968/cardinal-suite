@@ -29,7 +29,10 @@ pub fn start_drive_monitor(app_handle: tauri::AppHandle, watch_root: PathBuf) {
     std::thread::spawn(move || {
         let mut was_mounted = watch_root.exists();
         let initial = status_str(was_mounted);
-        info!("Drive monitor started: watch_root={:?} initial_status={}", watch_root, initial);
+        info!(
+            "Drive monitor started: watch_root={:?} initial_status={}",
+            watch_root, initial
+        );
         app_handle.emit("drive_status", initial).ok();
 
         loop {
