@@ -449,12 +449,11 @@ pub async fn toggle_main_window(app: AppHandle) {
 pub async fn set_tray_activation_policy(app: AppHandle, enabled: bool) {
     let app_handle = app.clone();
     if let Err(e) = app.run_on_main_thread(move || {
-        let policy = if enabled {
-            ActivationPolicy::Accessory
-        } else {
-            ActivationPolicy::Regular
-        };
-        if let Err(e) = app_handle.set_activation_policy(policy) {
+        // Always keep Regular policy so Cardinal appears in the App Switcher
+        // and Dock regardless of tray icon setting. The tray icon works fine
+        // with Regular policy — Accessory mode is only for pure menu-bar apps.
+        let _ = enabled;
+        if let Err(e) = app_handle.set_activation_policy(ActivationPolicy::Regular) {
             error!("Failed to set activation policy: {e:?}");
         }
         activate_main_window_impl(&app_handle);
