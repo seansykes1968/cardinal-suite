@@ -45,10 +45,9 @@ describe('PreferencesOverlay', () => {
 
     fireEvent.click(screen.getByText('preferences.save'));
 
-    expect(onWatchConfigChange).toHaveBeenCalledWith({
-      watchRoot: '/new/root',
-      ignorePaths: baseProps.ignorePaths,
-    });
+    expect(onWatchConfigChange).toHaveBeenCalledWith(
+      expect.objectContaining({ watchRoot: '/new/root', ignorePaths: baseProps.ignorePaths }),
+    );
   });
 
   it('saves ignore path updates via onWatchConfigChange', () => {
@@ -60,10 +59,9 @@ describe('PreferencesOverlay', () => {
 
     fireEvent.click(screen.getByText('preferences.save'));
 
-    expect(onWatchConfigChange).toHaveBeenCalledWith({
-      watchRoot: baseProps.watchRoot,
-      ignorePaths: ['/tmp/one', '/tmp/two'],
-    });
+    expect(onWatchConfigChange).toHaveBeenCalledWith(
+      expect.objectContaining({ watchRoot: baseProps.watchRoot, ignorePaths: ['/tmp/one', '/tmp/two'] }),
+    );
   });
 
   it('resets inputs to defaults before invoking onReset', () => {

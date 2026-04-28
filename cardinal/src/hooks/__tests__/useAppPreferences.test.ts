@@ -133,6 +133,7 @@ describe('useAppPreferences', () => {
       result.current.handleWatchConfigChange({
         watchRoot: '/tmp',
         ignorePaths: ['/tmp/ignore'],
+        scopeLabel: 'tmp',
       });
     });
 
@@ -141,6 +142,7 @@ describe('useAppPreferences', () => {
     expect(mockedSetWatchConfig).toHaveBeenCalledWith({
       watchRoot: '/tmp',
       ignorePaths: ['/tmp/ignore'],
+        scopeLabel: 'tmp',
     });
     expect(refreshSearchResults).toHaveBeenCalledTimes(1);
   });
@@ -171,6 +173,7 @@ describe('useAppPreferences', () => {
       result.current.handleWatchConfigChange({
         watchRoot: '/workspace',
         ignorePaths: ['/Volumes'],
+        scopeLabel: 'workspace',
       });
     });
 
@@ -206,6 +209,7 @@ describe('useAppPreferences', () => {
       result.current.handleWatchConfigChange({
         watchRoot: '/new-root',
         ignorePaths: ['/Volumes'], // same as before
+        scopeLabel: 'new-root',
       });
     });
 
@@ -244,6 +248,7 @@ describe('useAppPreferences', () => {
       result.current.handleWatchConfigChange({
         watchRoot: '/workspace', // same as before
         ignorePaths: ['/tmp/ignore'], // different
+        scopeLabel: 'workspace',
       });
     });
 
@@ -252,6 +257,7 @@ describe('useAppPreferences', () => {
     expect(mockedSetWatchConfig).toHaveBeenCalledWith({
       watchRoot: '/workspace',
       ignorePaths: ['/tmp/ignore'],
+        scopeLabel: 'tmp',
     });
     expect(refreshSearchResults).toHaveBeenCalledTimes(1);
   });
@@ -290,6 +296,7 @@ describe('useAppPreferences', () => {
       result.current.handleWatchConfigChange({
         watchRoot: '/workspace',
         ignorePaths: ['/System', '/Volumes'], // same items, different order
+        scopeLabel: 'workspace',
       });
     });
 
