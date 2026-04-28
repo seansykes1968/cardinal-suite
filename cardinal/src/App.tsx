@@ -187,6 +187,16 @@ function App() {
 
   const driveStatus = useDriveStatus();
 
+  // When a reindex cycle completes (Updating → Ready), trigger a fresh search so
+  // results reflect the new index rather than leaving the screen blank.
+  const prevLifecycleRef = useRef<typeof lifecycleState | null>(null);
+  useEffect(() => {
+    if (lifecycleState === 'Ready' && prevLifecycleRef.current === 'Updating') {
+      refreshSearchResults();
+    }
+    prevLifecycleRef.current = lifecycleState;
+  }, [lifecycleState, refreshSearchResults]);
+
   useAppWindowListeners({
     activeTab,
     focusSearchInput,

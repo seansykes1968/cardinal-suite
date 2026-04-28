@@ -15,17 +15,30 @@ export function useIndexTimer(
   const [label, setLabel] = useState<string | null>(null);
 
   useEffect(() => {
-    if (lifecycleState === 'Initializing' || lifecycleState === 'Updating') {
+    if (lifecycleState === 'Initializing') {
+      // New index cycle starting — begin timing from here.
       startTimeRef.current = Date.now();
       startFileCountRef.current = scannedFiles;
+    } else if (lifecycleState === 'Updating') {
+      // Safety net: if the first event we receive is Updating (no prior Initializing).
+      // Do NOT reset if the timer is already running — scannedFiles fires repeatedly
+      // during indexing and resetting here would collapse the elapsed time to ~0ms.
+      if (startTimeRef.current === null) {
+        startTimeRef.current = Date.now();
+        startFileCountRef.current = scannedFiles;
+      }
     } else if (lifecycleState === 'Ready' && startTimeRef.current !== null) {
       const elapsed = Date.now() - startTimeRef.current;
       const filesIndexed = scannedFiles - startFileCountRef.current;
       startTimeRef.current = null;
-      // When loading from cache the delta is 0 because the full count was
-      // already emitted before 'Updating' fired — fall back to the total.
-      const displayCount = filesIndexed === 0 ? scannedFiles : filesIndexed;
-      setLabel(formatIndexDuration(elapsed, displayCount));
+      // Sub-second completions are cache loads — showing "0s" is misleading,
+      // so we leave the previous label (or null) unchanged.
+      if (elapsed >= 1000) {
+        // Fall back to total count when the delta is 0 (e.g. cache hits where
+        // the full count was emitted before Updating fired).
+        const displayCount = filesIndexed <= 0 ? scannedFiles : filesIndexed;
+        setLabel(formatIndexDuration(elapsed, displayCount));
+      }
     }
   }, [lifecycleState, scannedFiles]);
 

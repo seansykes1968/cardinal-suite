@@ -132,6 +132,21 @@ function reducer(state: SearchState, action: SearchAction): SearchState {
         highlightTerms: [],
       };
     case 'SET_LIFECYCLE_STATE':
+      // When a new index cycle starts, discard stale results immediately so the
+      // previous folder's data never bleeds into the UI for the new folder.
+      if (action.payload.status === 'Initializing') {
+        return {
+          ...state,
+          lifecycleState: 'Initializing',
+          results: [],
+          resultsVersion: state.resultsVersion + 1,
+          resultCount: 0,
+          durationMs: null,
+          searchError: null,
+          showLoadingUI: false,
+          initialFetchCompleted: false,
+        };
+      }
       return {
         ...state,
         lifecycleState: action.payload.status,

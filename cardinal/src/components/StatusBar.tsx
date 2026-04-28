@@ -226,12 +226,14 @@ const StatusBar = ({
       </div>
 
       <div className="status-right">
-        <div className="status-section">
-          <span className="status-label">{t('statusBar.searchLabel')}</span>
-          <span className="status-value" title={t('statusBar.resultsTitle')}>
-            {searchDisplay}
-          </span>
-        </div>
+        {lifecycleState === 'Ready' && (
+          <div className="status-section">
+            <span className="status-label">{t('statusBar.searchLabel')}</span>
+            <span className="status-value" title={t('statusBar.resultsTitle')}>
+              {searchDisplay}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
