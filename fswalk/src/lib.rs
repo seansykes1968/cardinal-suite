@@ -207,6 +207,23 @@ pub fn walk_it<F: Fn() -> bool + Send + Sync>(walk_data: &WalkData<'_, F>) -> Op
     })
 }
 
+/// Returns `true` for files/dirs that should always be excluded from the index
+/// regardless of user-configured ignore paths.
+///
+/// Covers macOS-generated noise files that are never useful to search for:
+///   - `.DS_Store`      — Finder metadata, one per directory
+///   - `._*`            — AppleDouble resource fork stubs (common on SMB/network drives)
+///   - `.Spotlight-V100`, `.TemporaryItems`, `.Trashes`, `.fseventsd` — macOS system dirs
+fn should_skip_noise_file(name: &std::ffi::OsStr) -> bool {
+    let Some(s) = name.to_str() else {
+        return false;
+    };
+    matches!(
+        s,
+        ".DS_Store" | ".Spotlight-V100" | ".TemporaryItems" | ".Trashes" | ".fseventsd"
+    ) || s.starts_with("._")
+}
+
 /// Note: this function will create a Node for the given path even if it's
 /// missing or inaccessible, but the metadata will be None in that case.
 fn walk<F: Fn() -> bool + Send + Sync>(path: &Path, walk_data: &WalkData<'_, F>) -> Option<Node> {
@@ -229,6 +246,9 @@ fn walk<F: Fn() -> bool + Send + Sync>(path: &Path, walk_data: &WalkData<'_, F>)
                                 }
                                 let path = entry.path();
                                 if walk_data.should_ignore(&path) {
+                                    return None;
+                                }
+                                if should_skip_noise_file(&entry.file_name()) {
                                     return None;
                                 }
                                 // doesn't traverse symlink
