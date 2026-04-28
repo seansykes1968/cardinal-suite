@@ -88,18 +88,6 @@ function App() {
     t('sorting.disabled', { limit }),
   );
 
-  // Guard: don't fire a backend search until the user has typed MIN_QUERY_LENGTH
-  // characters. Passing an empty (or near-empty) query returns the entire index,
-  // which freezes the UI when the index contains millions of files.
-  const guardedQueueSearch = useCallback(
-    (...args: Parameters<typeof queueSearch>) => {
-      const [query, options] = args;
-      if (query.trim().length < MIN_QUERY_LENGTH) return;
-      queueSearch(query, options);
-    },
-    [queueSearch],
-  );
-
   const {
     activeTab,
     isSearchFocused,
@@ -114,7 +102,7 @@ function App() {
     submitFilesQuery,
   } = useFilesTabState({
     searchQuery: searchParams.query,
-    queueSearch: guardedQueueSearch,
+    queueSearch,
   });
   const { filteredEvents } = useRecentFSEvents({
     caseSensitive,
