@@ -142,7 +142,6 @@ describe('useAppPreferences', () => {
     expect(mockedSetWatchConfig).toHaveBeenCalledWith({
       watchRoot: '/tmp',
       ignorePaths: ['/tmp/ignore'],
-        scopeLabel: 'tmp',
     });
     expect(refreshSearchResults).toHaveBeenCalledTimes(1);
   });
@@ -257,7 +256,6 @@ describe('useAppPreferences', () => {
     expect(mockedSetWatchConfig).toHaveBeenCalledWith({
       watchRoot: '/workspace',
       ignorePaths: ['/tmp/ignore'],
-        scopeLabel: 'tmp',
     });
     expect(refreshSearchResults).toHaveBeenCalledTimes(1);
   });
