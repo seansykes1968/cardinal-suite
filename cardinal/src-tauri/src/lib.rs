@@ -34,7 +34,7 @@ use std::{
 };
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 use tracing::{info, level_filters::LevelFilter, warn};
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use window_controls::{activate_window, hide_window};
 
 static DB_PATH: OnceCell<PathBuf> = OnceCell::new();
@@ -50,12 +50,30 @@ pub(crate) struct LogicStartConfig {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> Result<()> {
-    let builder = tracing_subscriber::fmt();
-    if let Ok(filter) = EnvFilter::try_from_default_env() {
-        builder.with_env_filter(filter).init();
-    } else {
-        builder.with_max_level(LevelFilter::INFO).init();
-    }
+    // Set up log directory: ~/Library/Logs/Cardinal/
+    let log_dir = dirs::home_dir()
+        .map(|h| h.join("Library/Logs/Cardinal"))
+        .unwrap_or_else(|| PathBuf::from("/tmp/Cardinal"));
+    std::fs::create_dir_all(&log_dir).ok();
+
+    // Rolling daily log file — keeps one file per day, e.g. cardinal.log.2024-04-28
+    let file_appender = tracing_appender::rolling::daily(&log_dir, "cardinal.log");
+    let (non_blocking, _log_guard) = tracing_appender::non_blocking(file_appender);
+
+    let file_layer = tracing_subscriber::fmt::layer()
+        .with_ansi(false)
+        .with_writer(non_blocking);
+
+    let stdout_layer = tracing_subscriber::fmt::layer();
+
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(LevelFilter::INFO.to_string()));
+
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(stdout_layer)
+        .with(file_layer)
+        .init();
 
     let (finish_tx, finish_rx) = bounded::<Sender<Option<SearchCache>>>(1);
     let (search_tx, search_rx) = unbounded::<SearchJob>();
