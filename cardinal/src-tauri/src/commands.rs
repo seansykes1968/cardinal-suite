@@ -543,3 +543,60 @@ mod tests {
         assert_eq!(normalize_path_input("~someone/Documents"), None);
     }
 }
+
+/// Returns the POSIX path of the frontmost Finder window.
+/// Returns an error if Finder has no open windows.
+#[tauri::command]
+pub fn get_finder_window_path() -> Result<String, String> {
+    let output = std::process::Command::new("osascript")
+        .args([
+            "-e",
+            r#"tell application "Finder" to get POSIX path of (target of front window as alias)"#,
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run osascript: {e}"))?;
+
+    if !output.status.success() {
+        return Err("No Finder window is open".to_string());
+    }
+
+    let path = String::from_utf8(output.stdout)
+        .map_err(|e| format!("Invalid output: {e}"))?
+        .trim()
+        .to_string();
+
+    if path.is_empty() {
+        return Err("No Finder window is open".to_string());
+    }
+
+    Ok(path)
+}
+
+/// Lists immediate non-hidden subdirectories of `path`, sorted alphabetically.
+#[tauri::command]
+pub fn list_subdirectories(path: String) -> Result<Vec<String>, String> {
+    let dir = std::path::Path::new(&path);
+
+    if !dir.exists() {
+        return Err(format!("Path does not exist: {path}"));
+    }
+
+    let entries =
+        std::fs::read_dir(dir).map_err(|e| format!("Cannot read directory: {e}"))?;
+
+    let mut dirs: Vec<String> = entries
+        .flatten()
+        .filter(|e| {
+            e.file_type().map(|t| t.is_dir()).unwrap_or(false)
+                && !e
+                    .file_name()
+                    .to_str()
+                    .map(|n| n.starts_with('.'))
+                    .unwrap_or(true)
+        })
+        .map(|e| e.path().to_string_lossy().to_string())
+        .collect();
+
+    dirs.sort();
+    Ok(dirs)
+}

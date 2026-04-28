@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { useTranslation } from 'react-i18next';
 import { getWatchRootValidation, isPathInputValid } from '../utils/watchRoot';
 import ThemeSwitcher from './ThemeSwitcher';
 import LanguageSwitcher from './LanguageSwitcher';
 
-// "exclude" = original behaviour, list folders to skip.
-// "include" = list only the folders you want; everything else is ignored.
+// "exclude" = list folders to skip.
+// "include" = pick folders to scan via checkbox browser; everything else is ignored.
 type FolderMode = 'exclude' | 'include';
 
 type PreferencesOverlayProps = {
@@ -46,24 +47,85 @@ export function PreferencesOverlay({
   const [watchRootInput, setWatchRootInput] = useState<string>(() => watchRoot);
 
   // ---------------------------------------------------------------------------
-  // Include / exclude mode
+  // Folder mode
   // ---------------------------------------------------------------------------
   const [folderMode, setFolderMode] = useState<FolderMode>('exclude');
   const [ignorePathsInput, setIgnorePathsInput] = useState<string>(() => ignorePaths.join('\n'));
-  const [includePathsInput, setIncludePathsInput] = useState<string>('');
+
+  // Include mode — folder browser state
+  const [folderList, setFolderList] = useState<string[]>([]);
+  const [checkedFolders, setCheckedFolders] = useState<Set<string>>(new Set());
+  const [browsedPath, setBrowsedPath] = useState<string>('');
+  const [folderListLoading, setFolderListLoading] = useState<boolean>(false);
+  const [folderListError, setFolderListError] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
-  // Bug fix: prevent the overlay from closing when the user drags the textarea
-  // resize handle outside the card boundary.
-  //
-  // Root cause: macOS triggers a click event on the overlay element when a
-  // mousedown starts inside the card and the mouseup lands on the overlay
-  // background (which happens naturally when dragging a resize handle to the
-  // edge of the window). The original code closed the dialog on any click
-  // whose target was the overlay element — including these drag-release clicks.
-  //
-  // Fix: record where the mousedown occurred. Only close if BOTH the mousedown
-  // AND the subsequent click happened directly on the overlay backdrop.
+  // Load subfolder list from a given path
+  // ---------------------------------------------------------------------------
+  const loadFolderList = useCallback(async (path: string) => {
+    setFolderListLoading(true);
+    setFolderListError(null);
+    try {
+      const dirs = await invoke<string[]>('list_subdirectories', { path });
+      setFolderList(dirs);
+      setBrowsedPath(path);
+      // Default: everything checked (all included)
+      setCheckedFolders(new Set(dirs));
+    } catch (err) {
+      setFolderListError(typeof err === 'string' ? err : 'Could not read folder list.');
+      setFolderList([]);
+    } finally {
+      setFolderListLoading(false);
+    }
+  }, []);
+
+  // Auto-load when switching to include mode
+  useEffect(() => {
+    if (folderMode === 'include' && folderList.length === 0 && !folderListLoading) {
+      loadFolderList(watchRootInput.trim() || watchRoot);
+    }
+  }, [folderMode, folderList.length, folderListLoading, loadFolderList, watchRootInput, watchRoot]);
+
+  // ---------------------------------------------------------------------------
+  // Read the frontmost Finder window path then load its subfolders
+  // ---------------------------------------------------------------------------
+  const handleReadFinderWindow = useCallback(async () => {
+    setFolderListLoading(true);
+    setFolderListError(null);
+    try {
+      const path = await invoke<string>('get_finder_window_path');
+      await loadFolderList(path.trim());
+    } catch (err) {
+      setFolderListError(
+        typeof err === 'string' ? err : 'Could not read Finder window. Is a Finder window open?',
+      );
+      setFolderListLoading(false);
+    }
+  }, [loadFolderList]);
+
+  const handleToggleFolder = useCallback((path: string) => {
+    setCheckedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) {
+        next.delete(path);
+      } else {
+        next.add(path);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    setCheckedFolders(new Set(folderList));
+  }, [folderList]);
+
+  const handleDeselectAll = useCallback(() => {
+    setCheckedFolders(new Set());
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Close-on-backdrop fix: only close if mousedown AND click both landed on the
+  // overlay backdrop (prevents close when dragging the textarea resize handle).
   // ---------------------------------------------------------------------------
   const mouseDownTargetRef = useRef<EventTarget | null>(null);
 
@@ -82,14 +144,12 @@ export function PreferencesOverlay({
 
   useEffect(() => {
     if (!open) return;
-
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         onClose();
         event.preventDefault();
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open, onClose]);
@@ -105,6 +165,9 @@ export function PreferencesOverlay({
     setIgnorePathsInput(ignorePaths.join('\n'));
   }, [open, watchRoot, ignorePaths]);
 
+  // ---------------------------------------------------------------------------
+  // Threshold
+  // ---------------------------------------------------------------------------
   const commitThreshold = useCallback(() => {
     const numericText = thresholdInput.replace(/[^\d]/g, '');
     if (!numericText) {
@@ -128,6 +191,9 @@ export function PreferencesOverlay({
     }
   };
 
+  // ---------------------------------------------------------------------------
+  // Validation
+  // ---------------------------------------------------------------------------
   const { errorKey: watchRootErrorKey } = getWatchRootValidation(watchRootInput);
   const watchRootErrorMessage = watchRootErrorKey ? t(watchRootErrorKey) : null;
 
@@ -135,76 +201,90 @@ export function PreferencesOverlay({
     if (event.key === 'Escape') setWatchRootInput(watchRoot);
   };
 
-  // Paths parsed from whichever textarea is active in the current mode.
   const parsedIgnorePaths = ignorePathsInput
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
 
-  const parsedIncludePaths = includePathsInput
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-
   const ignorePathsErrorMessage = (() => {
-    const lines = folderMode === 'exclude' ? parsedIgnorePaths : parsedIncludePaths;
-    const invalid = lines.find((line) => !isPathInputValid(line));
+    if (folderMode === 'include') return null;
+    const invalid = parsedIgnorePaths.find((line) => !isPathInputValid(line));
     return invalid ? t('ignorePaths.errors.absolute') : null;
   })();
+
+  const includeSelectionError =
+    folderMode === 'include' && folderList.length > 0 && checkedFolders.size === 0
+      ? 'Select at least one folder to scan.'
+      : null;
 
   const handleIgnorePathsKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (event.key === 'Escape') setIgnorePathsInput(ignorePaths.join('\n'));
   };
 
-  const handleIncludePathsKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (event.key === 'Escape') setIncludePathsInput('');
-  };
-
   // ---------------------------------------------------------------------------
-  // When saving in "include" mode we need to know every top-level folder under
-  // watchRoot so we can exclude the ones the user did NOT list.
-  //
-  // We use Tauri's `readDir` to list immediate children of watchRoot, then
-  // subtract the include list to produce the ignore list.
+  // Save
   // ---------------------------------------------------------------------------
   const handleSave = useCallback((): void => {
-    if (watchRootErrorMessage || ignorePathsErrorMessage) return;
+    if (watchRootErrorMessage || ignorePathsErrorMessage || includeSelectionError) return;
     commitThreshold();
 
     const trimmedWatchRoot = watchRootInput.trim();
 
-    // In include mode the user lists folders they WANT. We pass those directly
-    // as the watch paths. In exclude mode we pass the ignore list as before.
-    // Note: full automatic computation of ignore paths from includes requires
-    // a backend directory listing — that will be wired up in a future update.
-    // For now, include mode stores the paths and the user manages them directly.
-    const finalIgnorePaths = folderMode === 'include' ? [] : parsedIgnorePaths;
+    let finalWatchRoot: string;
+    let finalIgnorePaths: string[];
 
-    onWatchConfigChange({ watchRoot: trimmedWatchRoot, ignorePaths: finalIgnorePaths });
-    setWatchRootInput(trimmedWatchRoot);
+    if (folderMode === 'include') {
+      // Use the browsed path as the new watch root so Cardinal only scans
+      // within that folder. Unchecked items become the ignore list.
+      finalWatchRoot = browsedPath || trimmedWatchRoot;
+      finalIgnorePaths = folderList.filter((f) => !checkedFolders.has(f));
+    } else {
+      finalWatchRoot = trimmedWatchRoot;
+      finalIgnorePaths = parsedIgnorePaths;
+    }
+
+    onWatchConfigChange({ watchRoot: finalWatchRoot, ignorePaths: finalIgnorePaths });
+    setWatchRootInput(finalWatchRoot);
     setIgnorePathsInput(finalIgnorePaths.join('\n'));
     onClose();
   }, [
     watchRootErrorMessage,
     ignorePathsErrorMessage,
+    includeSelectionError,
     commitThreshold,
     watchRootInput,
     folderMode,
+    browsedPath,
+    folderList,
+    checkedFolders,
     parsedIgnorePaths,
     onWatchConfigChange,
     onClose,
   ]);
 
+  // ---------------------------------------------------------------------------
+  // Reset
+  // ---------------------------------------------------------------------------
   const handleReset = (): void => {
     setThresholdInput(defaultSortThreshold.toString());
     setWatchRootInput(defaultWatchRoot);
     setIgnorePathsInput(defaultIgnorePaths.join('\n'));
-    setIncludePathsInput('');
+    setFolderList([]);
+    setCheckedFolders(new Set());
+    setBrowsedPath('');
     setFolderMode('exclude');
     onReset();
   };
 
   if (!open) return null;
+
+  const saveDisabled = Boolean(
+    watchRootErrorMessage || ignorePathsErrorMessage || includeSelectionError,
+  );
+
+  // Display just the folder name, not the full path, in the checkbox list
+  const folderDisplayName = (fullPath: string): string =>
+    fullPath.split('/').filter(Boolean).pop() ?? fullPath;
 
   return (
     <div
@@ -334,20 +414,165 @@ export function PreferencesOverlay({
               </label>
             </div>
           </div>
-          {/* Folder paths textarea — changes label based on mode */}
-          <div className="preferences-row">
-            <div className="preferences-row__details">
-              <p className="preferences-label">
-                {folderMode === 'include' ? 'Search folders' : t('ignorePaths.label')}
-              </p>
-              <p className="preferences-label-hint">
-                {folderMode === 'include'
-                  ? 'One folder per line. Only these folders will be indexed.'
-                  : 'One folder per line. These folders will be skipped.'}
-              </p>
+
+          {/* Include mode — folder browser */}
+          {folderMode === 'include' && (
+            <div className="preferences-row" style={{ alignItems: 'flex-start' }}>
+              <div className="preferences-row__details">
+                <p className="preferences-label">Search folders</p>
+                <p className="preferences-label-hint">
+                  Check the folders you want to scan.
+                </p>
+              </div>
+              <div className="preferences-control" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {/* Browsed path + Finder button */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span
+                    style={{
+                      flex: 1,
+                      fontSize: '0.75em',
+                      color: 'var(--color-text-secondary, #888)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={browsedPath}
+                  >
+                    {browsedPath || watchRootInput}
+                  </span>
+                  <button
+                    type="button"
+                    className="preferences-save"
+                    style={{ padding: '2px 10px', fontSize: '0.8em', whiteSpace: 'nowrap' }}
+                    onClick={handleReadFinderWindow}
+                    disabled={folderListLoading}
+                    title="Read folders from the frontmost Finder window"
+                  >
+                    {folderListLoading ? 'Loading…' : 'Read Finder window'}
+                  </button>
+                </div>
+
+                {/* Error */}
+                {folderListError && (
+                  <p
+                    className="permission-status permission-status--error preferences-field-error"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {folderListError}
+                  </p>
+                )}
+
+                {/* Select all / none */}
+                {folderList.length > 0 && (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={handleSelectAll}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        fontSize: '0.75em',
+                        color: 'var(--color-accent, #0066cc)',
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeselectAll}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        fontSize: '0.75em',
+                        color: 'var(--color-accent, #0066cc)',
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      Deselect all
+                    </button>
+                  </div>
+                )}
+
+                {/* Checkbox list */}
+                {folderList.length > 0 && (
+                  <div
+                    style={{
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      border: '1px solid var(--color-border, #ddd)',
+                      borderRadius: '6px',
+                      padding: '4px 0',
+                    }}
+                  >
+                    {folderList.map((folder) => (
+                      <label
+                        key={folder}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '4px 10px',
+                          cursor: 'pointer',
+                          fontSize: '0.85em',
+                        }}
+                        title={folder}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checkedFolders.has(folder)}
+                          onChange={() => handleToggleFolder(folder)}
+                        />
+                        <span
+                          style={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {folderDisplayName(folder)}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {/* No folders found */}
+                {!folderListLoading && folderList.length === 0 && !folderListError && (
+                  <p style={{ fontSize: '0.8em', color: 'var(--color-text-secondary, #888)' }}>
+                    No subfolders found. Try "Read Finder window" to browse a different location.
+                  </p>
+                )}
+
+                {/* Selection validation */}
+                {includeSelectionError && (
+                  <p
+                    className="permission-status permission-status--error preferences-field-error"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {includeSelectionError}
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="preferences-control">
-              {folderMode === 'exclude' ? (
+          )}
+
+          {/* Exclude mode — ignore paths textarea */}
+          {folderMode === 'exclude' && (
+            <div className="preferences-row">
+              <div className="preferences-row__details">
+                <p className="preferences-label">{t('ignorePaths.label')}</p>
+                <p className="preferences-label-hint">
+                  One folder per line. These folders will be skipped.
+                </p>
+              </div>
+              <div className="preferences-control">
                 <textarea
                   className="preferences-field preferences-textarea"
                   value={ignorePathsInput}
@@ -357,29 +582,18 @@ export function PreferencesOverlay({
                   autoComplete="off"
                   spellCheck={false}
                 />
-              ) : (
-                <textarea
-                  className="preferences-field preferences-textarea"
-                  value={includePathsInput}
-                  onChange={(event) => setIncludePathsInput(event.target.value)}
-                  onKeyDown={handleIncludePathsKeyDown}
-                  aria-label="Search folders"
-                  placeholder={`${watchRootInput}/01_Images\n${watchRootInput}/02_Design`}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              )}
-              {ignorePathsErrorMessage ? (
-                <p
-                  className="permission-status permission-status--error preferences-field-error"
-                  role="status"
-                  aria-live="polite"
-                >
-                  {ignorePathsErrorMessage}
-                </p>
-              ) : null}
+                {ignorePathsErrorMessage ? (
+                  <p
+                    className="permission-status permission-status--error preferences-field-error"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    {ignorePathsErrorMessage}
+                  </p>
+                ) : null}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <footer className="preferences-card__footer">
@@ -387,7 +601,7 @@ export function PreferencesOverlay({
             className="preferences-save"
             type="button"
             onClick={handleSave}
-            disabled={Boolean(watchRootErrorMessage || ignorePathsErrorMessage)}
+            disabled={saveDisabled}
           >
             {t('preferences.save')}
           </button>
