@@ -54,5 +54,9 @@ pub fn start_drive_monitor(app_handle: tauri::AppHandle, watch_root: PathBuf) {
 }
 
 fn status_str(mounted: bool) -> &'static str {
-    if mounted { "mounted" } else { "unmounted" }
+    if mounted {
+        "mounted"
+    } else {
+        "unmounted"
+    }
 }

@@ -581,8 +581,7 @@ pub fn list_subdirectories(path: String) -> Result<Vec<String>, String> {
         return Err(format!("Path does not exist: {path}"));
     }
 
-    let entries =
-        std::fs::read_dir(dir).map_err(|e| format!("Cannot read directory: {e}"))?;
+    let entries = std::fs::read_dir(dir).map_err(|e| format!("Cannot read directory: {e}"))?;
 
     let mut dirs: Vec<String> = entries
         .flatten()
