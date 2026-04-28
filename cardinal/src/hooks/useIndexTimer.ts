@@ -22,7 +22,10 @@ export function useIndexTimer(
       const elapsed = Date.now() - startTimeRef.current;
       const filesIndexed = scannedFiles - startFileCountRef.current;
       startTimeRef.current = null;
-      setLabel(formatIndexDuration(elapsed, filesIndexed));
+      // When loading from cache the delta is 0 because the full count was
+      // already emitted before 'Updating' fired — fall back to the total.
+      const displayCount = filesIndexed === 0 ? scannedFiles : filesIndexed;
+      setLabel(formatIndexDuration(elapsed, displayCount));
     }
   }, [lifecycleState, scannedFiles]);
 
