@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { useTranslation } from 'react-i18next';
 import { getWatchRootValidation, isPathInputValid } from '../utils/watchRoot';
 import ThemeSwitcher from './ThemeSwitcher';
@@ -43,6 +44,10 @@ export function PreferencesOverlay({
   themeResetToken,
 }: PreferencesOverlayProps): React.JSX.Element | null {
   const { t } = useTranslation();
+  const [appVersion, setAppVersion] = useState<string>('');
+  useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => {});
+  }, []);
   const [thresholdInput, setThresholdInput] = useState<string>(() => sortThreshold.toString());
   const [watchRootInput, setWatchRootInput] = useState<string>(() => watchRoot);
 
@@ -608,6 +613,11 @@ export function PreferencesOverlay({
           <button className="preferences-reset" type="button" onClick={handleReset}>
             {t('preferences.reset')}
           </button>
+          {appVersion && (
+            <span style={{ marginLeft: 'auto', fontSize: '11px', opacity: 0.4, alignSelf: 'center' }}>
+              v{appVersion}
+            </span>
+          )}
         </footer>
       </div>
     </div>
